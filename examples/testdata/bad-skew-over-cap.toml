@@ -1,0 +1,95 @@
+# ans-authz — example configuration.
+#
+# Validate before deploying:  ans-authz validate-config --config examples/ans-authz.toml
+#
+# Security-relevant settings have no defaults. ANS-6 §9 requires a deployment to
+# *choose* its failure behaviour and §11.1 requires it to document the values it
+# runs, so a field that matters cannot be answered by omission — leaving one out
+# fails the parse rather than picking something permissive.
+
+[server]
+# Loopback or a Unix socket. This service answers "is this caller authentic", so
+# anything that can reach it and be believed is an authentication bypass.
+listen = "127.0.0.1:10003"
+admin_listen = "127.0.0.1:9901"
+
+[authority]
+# ANS-6 §7.7. `context_extension` is the strong form: the authority comes from a
+# per-virtual-host value the proxy asserts via xDS, which per the proto is not
+# forwarded upstream and so cannot be reached by a client.
+#
+# The alternative, `sole_configured`, is only correct while this callee answers as
+# exactly one authority — validation refuses it with zero or several.
+#
+# Neither configured is a startup failure. §7.7: "Implementations MUST fail
+# startup when neither is configured, and MUST NOT fall back to deriving the
+# comparison authority from the request's own Host header."
+mode = "context_extension"
+context_extension_key = "ans_trusted_authority"
+# Optional belt: a proxy-asserted authority outside this list is refused, so a
+# mis-scoped xDS push cannot introduce an authority nobody intended.
+authorities = ["api.example.com"]
+
+[verification]
+# §10.1 requires implementing at least one caller-authentication method and
+# documenting which. "method_b" is DPoP (§7); "method_a" is mTLS (§6).
+methods = "method_b"
+
+# §7.1. The receipt proves identity (the registration is in the log); the status
+# token proves liveness. Dropping the receipt is a permitted "reduced mode" that
+# trades away the request-time inclusion proof — and validation demands a written
+# justification for it, so it cannot be done by flipping a boolean.
+require_receipt = true
+
+# §7.5.4 peer pinning. Empty accepts any agent the TL vouches for.
+allowed_ans_names = []
+
+# §7.4 step 9 — the DPoP `iat` freshness window.
+#
+# §7.6: "each halving of the window halves both replay exposure and the cache
+# pressure". Reach for this before growing the replay cache.
+pop_skew_secs = 120
+
+# §4.4 step 7 — status-token clock skew. The spec caps this at 600s, and a wider
+# value would extend the revocation-latency bound (§11.1).
+status_skew_secs = 900
+
+# §7.13 requires a digest on every Method B proof, including empty requests.
+# "optional" belonged to an earlier draft and now fails startup for Method B.
+# Envoy must supply complete raw bytes (with_request_body, pack_as_bytes: true,
+# allow_partial_message: false). The verifier hashes only after identity binding.
+content_binding = "required"
+
+[replay]
+# §7.6. "redis" is shared across replicas and is the only conformant choice above
+# one replica; "memory" blocks reuse within this process only.
+backend = "redis"
+redis_url = "redis://127.0.0.1:6379"
+key_prefix = "ans6:jti:"
+
+# §9.6 — "a shared cache MUST be consulted with a deadline; a timeout is a
+# rejection, never a skip". This must stay below the Envoy filter's grpc timeout.
+deadline_ms = 50
+
+# Only used by the memory backend. Size for the in-flight window:
+# max_entries >= peak_rps * (pop_skew + 5s grace).
+max_entries = 100000
+
+# Declared, not detected. The memory backend is refused above 1 — but nothing
+# stops this Deployment being scaled up afterwards, so prefer redis for anything
+# that might grow. See the startup warning.
+replicas = 3
+
+[transparency_log]
+# §4.5 — fetched once at startup and refreshed in the background, never in the
+# request path (§4.6). A failed bootstrap fetch is fatal: with no key there is
+# nothing to verify against.
+root_keys_url = "https://transparency-log.example.com/root-keys"
+
+# §11.10 — "root-key trust is fetch-channel trust". A fetched key is trusted on
+# no more evidence than a TLS connection to a domain you configured, and cached
+# keys are never removed. Pinning here instead makes every addition an
+# operator-approval event.
+static_root_keys = []
+
+refresh_interval_secs = 1800

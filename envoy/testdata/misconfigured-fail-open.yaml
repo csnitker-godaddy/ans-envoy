@@ -1,0 +1,14 @@
+# NEGATIVE FIXTURE — NOT ANS-6 conformant.
+#
+# `failure_mode_allow: true` converts an authenticator outage into an open door,
+# which is the opposite of what §7.6 and §9.6 require.
+http_filters:
+  - name: envoy.filters.http.ext_authz
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+      transport_api_version: V3
+      encode_raw_headers: true
+      failure_mode_allow: true
+      grpc_service:
+        envoy_grpc: { cluster_name: ans_authz }
+        timeout: 1s

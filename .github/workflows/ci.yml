@@ -1,0 +1,303 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Read-only. ans-sdk-rust grants pull-requests: write for its coverage-comment
+# steps; this workflow posts nothing, so it does not need the privilege.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Denial comes from here plus the [workspace.lints] tables in Cargo.toml, not
+  # from clippy CLI flags — matching ans-sdk-rust.
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-clippy-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-clippy-
+      - run: cargo clippy --locked --workspace --all-targets
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    # ANS-6 §7.6 requires replay state shared across replicas. Test the backend
+    # against real Redis. `noeviction`
+    # is not a nicety: under an evicting policy Redis can drop a live `jti` and the
+    # next presentation of that proof looks fresh, which §7.6 forbids — and
+    # RedisBackend::connect refuses to start against such a store.
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
+    env:
+      ANS_ENVOY_TEST_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-test-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-test-
+      - run: cargo test --locked --workspace
+
+  # ── The conformance gate ───────────────────────────────────────────────────
+  #
+  # Six groups of Envoy settings decide whether a deployment satisfies ANS-6 and none of
+  # them live in the binary, so a regression in a shipped YAML file is a security
+  # regression no unit test would catch. `cargo test` already lints the shipped
+  # artifacts (crates/ans-envoy-config/tests/shipped_artifacts.rs); this job
+  # exercises the same checks through the CLI an operator actually runs, so a
+  # break in argument handling or exit codes is caught too.
+  conformance:
+    name: Conformance artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-conformance-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-conformance-
+      - run: cargo build --locked -p ans-authz
+      - name: Shipped Envoy configs must lint clean
+        run: |
+          set -euo pipefail
+          ./target/debug/ans-authz validate-envoy envoy/bootstrap/sidecar-loopback.yaml
+          ./target/debug/ans-authz validate-envoy envoy/fragments/mtls-method-a.yaml --method-a
+      - name: Shipped example config must be conformant
+        run: ./target/debug/ans-authz validate-config --config examples/ans-authz.toml
+
+      # `validate-envoy` checks ANS-6 semantics; it does not check Envoy's schema.
+      # Envoy does. This step caught a real error the first time it ran — a
+      # `transport_socket` at listener level instead of on the filter chain — which
+      # no amount of ANS-6 linting would have found.
+      - name: Envoy must accept the shipped bootstrap
+        run: |
+          set -euo pipefail
+          ENVOY_VERSION=v1.36-latest
+          workdir="$(mktemp -d)"
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout "$workdir/server.key" -out "$workdir/server.crt" \
+            -days 1 -subj "/CN=api.example.com" 2>/dev/null
+          # The shipped config points at deployment paths; swap in throwaway certs
+          # so validation reaches the schema rather than stopping on a missing file.
+          sed "s|/etc/envoy/tls|/work|g" envoy/bootstrap/sidecar-loopback.yaml \
+            > "$workdir/bootstrap.yaml"
+          # Preserve mktemp's private directory and key permissions. Run the
+          # validator as the runner UID so it can read the read-only mount.
+          docker run --rm --user "$(id -u):$(id -g)" -v "$workdir:/work:ro" \
+            "envoyproxy/envoy:$ENVOY_VERSION" \
+            --mode validate -c /work/bootstrap.yaml
+      - name: Negative fixtures must stay rejected
+        run: |
+          set -uo pipefail
+          fail=0
+          for f in envoy/testdata/misconfigured-*.yaml; do
+            if ./target/debug/ans-authz validate-envoy "$f" > /dev/null 2>&1; then
+              echo "::error::$f should have been rejected by validate-envoy but passed"
+              fail=1
+            else
+              echo "ok: $f rejected"
+            fi
+          done
+          for f in examples/testdata/bad-*.toml; do
+            if ./target/debug/ans-authz validate-config --config "$f" > /dev/null 2>&1; then
+              echo "::error::$f should have been rejected by validate-config but passed"
+              fail=1
+            else
+              echo "ok: $f rejected"
+            fi
+          done
+          exit $fail
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-build-
+      - run: cargo build --locked --workspace --release
+
+  doc:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+      - run: cargo doc --workspace --no-deps
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: "1.88"
+      - run: cargo check --locked --workspace
+
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+        with:
+          tool: cargo-audit
+      - run: cargo audit
+
+  deny:
+    name: Dependency Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+
+  coverage:
+    name: Coverage (82% threshold)
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
+    env:
+      ANS_ENVOY_TEST_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+        with:
+          tool: cargo-llvm-cov
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-coverage-
+      # 2026-10-19 local workspace measurement: 78.00% with real Redis.
+      # This currently fails the existing 82% gate; do not lower it. Add
+      # CLI/startup/gRPC/probe traffic coverage, then reach the 90% org target.
+      # See docs/release-readiness.md for measured gaps and verification scope.
+      - name: Enforce coverage threshold
+        run: |
+          set -euo pipefail
+          cargo llvm-cov --locked --workspace --fail-under-lines 82 | tee coverage-report.txt
+      - if: always()
+        run: cargo llvm-cov report --lcov --output-path lcov.info
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lcov-report
+          path: lcov.info
+
+  # ── SDK drift signal ───────────────────────────────────────────────────────
+  #
+  # The merged ANS-6 API is not yet published to crates.io; ans-verify is pinned to
+  # a git rev. This job tries the latest crates.io release: green means the API
+  # published and the git dependency can be dropped (and this repo can then be
+  # published to crates.io, which cargo refuses while a git dep is present).
+  #
+  # Allowed to fail — it is a signal, not a gate.
+  sdk-drift:
+    name: SDK drift (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master
+        with:
+          toolchain: stable
+      - name: Does a published ans-verify carry the DPoP API yet?
+        run: |
+          set -euo pipefail
+          # Switch both workspace dependencies together. Changing only core
+          # leaves replay/authz/probe on git and tests incompatible mixed types.
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          import re
+          path = Path("Cargo.toml")
+          manifest = path.read_text()
+          manifest, count = re.subn(
+              r'git = "https://github.com/agentnameservice/ans-sdk-rust", rev = "[^"]+"',
+              'version = "*"', manifest,
+          )
+          assert count == 2, "expected both SDK workspace dependencies"
+          path.write_text(manifest)
+          PYTHON
+          cargo update
+          cargo check --workspace --all-targets

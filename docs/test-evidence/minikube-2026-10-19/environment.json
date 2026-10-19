@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-19",
+  "profile": "minikube",
+  "namespace": "ans-envoy-validation",
+  "kubernetes": "v1.35.1",
+  "architecture": "arm64",
+  "containerRuntime": "containerd://2.2.1",
+  "envoy": "1.36.13",
+  "authorizer_image": "localhost/ans-envoy/ans-authz:ans6-20261019-r2",
+  "authorizer_image_id": "sha256:0ef99e38c2a278ef50374f1bf7e7e44711d9ae67c87913b29039c5b15b3cdcc3",
+  "sdk_revision": "0a86cacfd4825edef3a2ea7ef9c2026e37ca7629",
+  "pods": [
+    {
+      "name": "agent-7d544c7899-rf9mp",
+      "phase": "Running",
+      "containers": [
+        {
+          "name": "agent",
+          "ready": true,
+          "imageID": "sha256:2a8393f6eea69a4b558e5dd3a82e2b5a73d30ce3a2fcb5b848bea8545af70bb3"
+        }
+      ]
+    },
+    {
+      "name": "ans-gateway-58c65db46-4q8z2",
+      "phase": "Running",
+      "containers": [
+        {
+          "name": "ans-authz",
+          "ready": true,
+          "imageID": "sha256:0ef99e38c2a278ef50374f1bf7e7e44711d9ae67c87913b29039c5b15b3cdcc3"
+        },
+        {
+          "name": "envoy",
+          "ready": true,
+          "imageID": "sha256:4280bde57e0752d7472014c07dcc196800a47d3a6c8b00aae8163e6e9338eb6c"
+        }
+      ]
+    },
+    {
+      "name": "ans-gateway-58c65db46-xmt54",
+      "phase": "Running",
+      "containers": [
+        {
+          "name": "ans-authz",
+          "ready": true,
+          "imageID": "sha256:0ef99e38c2a278ef50374f1bf7e7e44711d9ae67c87913b29039c5b15b3cdcc3"
+        },
+        {
+          "name": "envoy",
+          "ready": true,
+          "imageID": "sha256:4280bde57e0752d7472014c07dcc196800a47d3a6c8b00aae8163e6e9338eb6c"
+        }
+      ]
+    },
+    {
+      "name": "redis-56c8b968d9-wgvvq",
+      "phase": "Running",
+      "containers": [
+        {
+          "name": "redis",
+          "ready": true,
+          "imageID": "sha256:ec4f171e9ff071bb2a1c936057d3be00206069b028b6c0d61df2477e1dd02c42"
+        }
+      ]
+    }
+  ]
+}

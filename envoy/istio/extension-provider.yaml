@@ -1,0 +1,26 @@
+# Istio MeshConfig extension provider for ans-authz.
+#
+# This half is supported API. The parts Istio does not expose are in
+# envoyfilter-raw-headers.yaml — read ./README.md first.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio
+  namespace: istio-system
+data:
+  mesh: |
+    extensionProviders:
+      - name: ans-authz
+        envoyExtAuthzGrpc:
+          service: ans-authz.ans-system.svc.cluster.local
+          port: 10003
+          # NOT Istio's default. ANS-6 verification does two or three ECDSA
+          # verifications and may consult a shared replay store.
+          timeout: 1s
+          # §7.6, §9.6 — fail closed. Istio's field is `failOpen`, so the
+          # conformant value is false.
+          failOpen: false
+          # An infrastructure failure should not present as a policy decision.
+          statusOnError: 503
+          # §7.13 complete raw body buffering is set by the accompanying
+          # EnvoyFilter patch; verify the rendered listener before deployment.

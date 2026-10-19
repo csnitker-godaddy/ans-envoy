@@ -1,0 +1,102 @@
+{
+  "target_tl": "https://tl.ans.snitker.dev",
+  "trust_mode": "verified HTTPS-fetched public key pin plus configured refresh URL",
+  "key_id": "8f74b1bd",
+  "ans_name": "ans://v1.1.0.demo.ans.snitker.dev",
+  "agent_id": "235aaad2-95d7-4ecb-bba0-50bbb8d44043",
+  "certificate_fingerprint": "SHA256:617f30b7fdee8b3a6b8a30515aa98f6f8f46c2e31d0e401e8a39973381826d62",
+  "private_key_location": "remained on the demo host",
+  "passed": 9,
+  "total": 9,
+  "results": [
+    {
+      "name": "registered demo identity accepted",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "real identity cross-replica replay rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "REPLAY",
+      "label": "REPLAY",
+      "upstream_requests": 0
+    },
+    {
+      "name": "real identity tampered content rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "CONTENT_BINDING_MISMATCH",
+      "label": "CONTENT_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "real identity intact content accepted",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "real identity missing status rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MISSING_HEADERS",
+      "label": "MISSING_HEADERS",
+      "upstream_requests": 0
+    },
+    {
+      "name": "real identity missing receipt rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MISSING_HEADERS",
+      "label": "MISSING_HEADERS",
+      "upstream_requests": 0
+    },
+    {
+      "name": "real identity invalid receipt rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "RECEIPT_INVALID",
+      "label": "RECEIPT_INVALID",
+      "upstream_requests": 0
+    },
+    {
+      "name": "real identity wrong origin rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "HTTP_BINDING_MISMATCH",
+      "label": "HTTP_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "real identity forged signature rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "SIGNATURE_INVALID",
+      "label": "SIGNATURE_INVALID",
+      "upstream_requests": 0
+    }
+  ],
+  "root_key_spki_sha256": "8f74b1bd4a3e2f2026aa9c381dc44a6ff8494fc7e6f7a95098b22d3f880407e9",
+  "receipt_sha256": "25f042e74e383f54f7513e86e09c1bf7cea60f5571592d4eb6ef3f5976a2d17e",
+  "status_token_sha256": "fddfab85ebfd672096ccb7792e167a4313dddd699068846fdfcc0e8f4b2354ce",
+  "automatic_key_refresh": "not validated: pod DNS fails and direct external TCP connection times out",
+  "namespace": "ans-envoy-validation",
+  "context": "minikube",
+  "root_keys_url": "https://tl.ans.snitker.dev/root-keys",
+  "synthetic_key_retained": false
+}

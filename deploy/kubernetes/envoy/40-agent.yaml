@@ -1,0 +1,76 @@
+# Stand-in for your agent. Replace this with the real one — nothing else in these
+# manifests depends on it beyond the Service name `agent:8080`.
+#
+# It echoes back the `x-ans-caller-*` headers ans-authz injected, which is a useful
+# way to confirm the authenticated identity actually reached the upstream rather
+# than just that the request was allowed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-script
+  namespace: ans-demo
+data:
+  agent.py: |
+    import json
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class Handler(BaseHTTPRequestHandler):
+        def _reply(self):
+            n = int(self.headers.get("content-length") or 0)
+            body_in = self.rfile.read(n) if n else b""
+            caller = {k.lower(): v for k, v in self.headers.items()
+                      if k.lower().startswith("x-ans-caller-")}
+            body = json.dumps({
+                "ok": True,
+                "caller": caller,
+                "received_bytes": len(body_in),
+            }).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        do_GET = do_POST = do_PUT = do_DELETE = do_PATCH = _reply
+        def log_message(self, *a): pass
+
+    HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  namespace: ans-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: agent }
+  template:
+    metadata:
+      labels: { app: agent }
+    spec:
+      containers:
+        - name: agent
+          image: python:3.12-alpine
+          command: ["python3", "/app/agent.py"]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: script
+              mountPath: /app
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { memory: 128Mi }
+      volumes:
+        - name: script
+          configMap: { name: agent-script }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent
+  namespace: ans-demo
+spec:
+  selector: { app: agent }
+  ports:
+    - port: 8080
+      targetPort: 8080

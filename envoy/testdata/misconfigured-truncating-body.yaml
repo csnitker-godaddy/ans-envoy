@@ -1,0 +1,24 @@
+# NEGATIVE FIXTURE — NOT ANS-6 conformant.
+#
+# Two §7.13 errors in one file, both of which corrupt the content digest rather
+# than merely weakening it:
+#
+#   allow_partial_message: true — Envoy truncates at max_request_bytes and flags
+#   x-envoy-auth-partial-body. A prefix hash never matches a whole-content digest,
+#   so it is indistinguishable from tampering.
+#
+#   pack_as_bytes absent — the string `body` field replaces non-UTF-8 bytes with
+#   '!', so the digest is over bytes the caller never sent.
+http_filters:
+  - name: envoy.filters.http.ext_authz
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+      transport_api_version: V3
+      encode_raw_headers: true
+      failure_mode_allow: false
+      with_request_body:
+        max_request_bytes: 8192
+        allow_partial_message: true
+      grpc_service:
+        envoy_grpc: { cluster_name: ans_authz }
+        timeout: 1s

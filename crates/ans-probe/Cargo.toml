@@ -1,0 +1,30 @@
+[package]
+name = "ans-probe"
+description = "Development tool: mint ANS-6 artifacts and probe a deployed ans-envoy for the refusals it should make"
+keywords = ["ans", "ans-6", "dpop", "testing", "envoy"]
+categories = ["development-tools::testing"]
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ans-types = { workspace = true }
+ans-verify = { workspace = true }
+base64 = { workspace = true }
+ciborium = "0.2"
+clap = { workspace = true }
+hex = { workspace = true }
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

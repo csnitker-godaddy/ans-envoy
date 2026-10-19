@@ -1,0 +1,124 @@
+# Envoy and ans-authz in one pod.
+#
+# They share the pod's network namespace, so ans-authz listens on loopback only and
+# is unreachable from anywhere else in the cluster. That matters more than usual:
+# this process answers "is this caller authentic", so anything that can reach it and
+# be believed is an authentication bypass.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ans-gateway
+  namespace: ans-demo
+spec:
+  # Safe to scale: the §7.6 replay cache is Redis, shared across replicas. On the
+  # in-process cache this would be a conformance violation, and ans-authz refuses
+  # to start in that combination (`replicas > 1` with `backend = "memory"`).
+  replicas: 2
+  selector:
+    matchLabels: { app: ans-gateway }
+  template:
+    metadata:
+      labels: { app: ans-gateway }
+    spec:
+      containers:
+        - name: envoy
+          image: envoyproxy/envoy:v1.36-latest
+          args:
+            - "-c"
+            - "/etc/envoy/envoy.yaml"
+            - "--log-level"
+            - "warn"
+          ports:
+            - name: http
+              containerPort: 8443
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9902
+            initialDelaySeconds: 3
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+
+        - name: ans-authz
+          image: ans-envoy/ans-authz:dev
+          # Side-loaded into minikube's container runtime rather than pulled.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: admin
+              containerPort: 9901
+          env:
+            - name: ANS_AUTHZ_LOG
+              value: "info"
+            # Structured logs. Every denial is logged with its ANS-6 label, and
+            # the detail — which check failed — stays here rather than going to the
+            # caller.
+            - name: ANS_AUTHZ_LOG_JSON
+              value: "1"
+          volumeMounts:
+            - name: ans-authz-config
+              mountPath: /etc/ans-authz
+              readOnly: true
+          # Liveness says only "the process is up". It deliberately ignores proxy
+          # conformance: restarting would not fix a misconfigured Envoy.
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9901 }
+            initialDelaySeconds: 3
+          # Readiness reports OBSERVED conformance and returns 503 once a request
+          # has arrived without an uncoalesced header map — i.e. once it knows
+          # `encode_raw_headers` is missing and it is denying everything. Gate your
+          # rollout on this; it is the difference between finding out now and
+          # finding out from a caller.
+          readinessProbe:
+            httpGet: { path: /readyz, port: 9901 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+      volumes:
+        - name: envoy-config
+          configMap: { name: envoy-config }
+        - name: ans-authz-config
+          configMap: { name: ans-authz-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ans-gateway
+  namespace: ans-demo
+spec:
+  type: NodePort
+  selector: { app: ans-gateway }
+  ports:
+    - name: http
+      port: 8443
+      targetPort: 8443
+      # Fixed so the URL does not move between applies.
+      nodePort: 30843
+---
+# Metrics and readiness, separately addressable so you can curl /readyz and
+# /metrics without going through the data path.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ans-authz-admin
+  namespace: ans-demo
+spec:
+  type: NodePort
+  selector: { app: ans-gateway }
+  ports:
+    - name: admin
+      port: 9901
+      targetPort: 9901
+      nodePort: 30901

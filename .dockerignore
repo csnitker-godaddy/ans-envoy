@@ -1,0 +1,7 @@
+target/
+.git/
+.claude/
+.codex/
+.agents/
+.DS_Store
+*.log

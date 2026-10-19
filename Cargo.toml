@@ -1,0 +1,179 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/ans-envoy-core",
+    "crates/ans-envoy-adapter",
+    "crates/ans-envoy-replay",
+    "crates/ans-envoy-config",
+    "crates/ans-authz",
+    "crates/ans-probe",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+homepage = "https://github.com/agentnameservice/ans-envoy"
+repository = "https://github.com/agentnameservice/ans-envoy"
+
+[workspace.dependencies]
+# Internal crates
+ans-envoy-core = { path = "crates/ans-envoy-core", version = "0.1.0" }
+ans-envoy-adapter = { path = "crates/ans-envoy-adapter", version = "0.1.0" }
+ans-envoy-replay = { path = "crates/ans-envoy-replay", version = "0.1.0" }
+ans-envoy-config = { path = "crates/ans-envoy-config", version = "0.1.0" }
+
+# ANS-6 verification from the merged SDK main revision (2026-10-12).
+# Pin ans-types and ans-verify together; the published 0.1.5 crates predate
+# Method B. Replace both git sources when a compatible SDK release is published.
+ans-types = { git = "https://github.com/agentnameservice/ans-sdk-rust", rev = "0a86cacfd4825edef3a2ea7ef9c2026e37ca7629" }
+ans-verify = { git = "https://github.com/agentnameservice/ans-sdk-rust", rev = "0a86cacfd4825edef3a2ea7ef9c2026e37ca7629", default-features = false, features = [
+    "scitt",
+    "fast-verify",
+] }
+
+# gRPC / Envoy wire types.
+# tonic and prost are pinned to 0.13 to match envoy-types 0.6, which generates
+# its `Authorization` service against tonic 0.13. A newer tonic here would not
+# satisfy the generated trait.
+tonic = "0.13"
+prost = "0.13"
+envoy-types = "0.6"
+
+# Async runtime
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "signal",
+    "net",
+    "time",
+    "sync",
+] }
+
+# HTTP client, for the ans-probe dev tool
+# `rustls` rather than `rustls-tls` — that is this reqwest version's feature name,
+# and it matches what ans-verify already links, so no second TLS stack appears.
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+
+# Replay cache backend
+redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
+
+# Admin surface (health, readiness, metrics, observed-config)
+axum = "0.8"
+
+# UDS listener adapter for tonic
+tokio-stream = { version = "0.1", features = ["net"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+toml = "0.8"
+
+# Error handling
+thiserror = "2.0"
+
+# Async trait objects (the SDK's ReplayCache is an #[async_trait] trait)
+async-trait = "0.1"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Cryptography / encoding
+sha2 = "0.11"
+hex = "0.4"
+base64 = "0.23"
+subtle = "2.6"
+percent-encoding = "2"
+x509-parser = "0.18"
+
+# Utilities
+url = "2.5"
+uuid = { version = "1", features = ["serde"] }
+
+# Testing
+rstest = "0.26"
+
+[workspace.lints.clippy]
+# ── Pedantic (opinionated but high-value) ──
+pedantic = { level = "warn", priority = -1 }
+
+# Pedantic overrides — too noisy for this codebase
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+# ── Selected nursery lints ──
+redundant_pub_crate = "warn"
+use_self = "warn"
+
+# ── Panic prevention ──
+#
+# This process is an authenticator on the request path. A panic in a request
+# handler is an authentication outage, so the same bar the SDK sets applies here.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+exit = "deny"
+mem_forget = "deny"
+
+# ── Restriction lints ──
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+todo = "deny"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+future_incompatible = { level = "deny", priority = -1 }
+missing_debug_implementations = "warn"
+
+# `envoy-types` has no feature flags, so it compiles all 312 generated Envoy
+# proto modules for the three messages this service actually uses. Full
+# debuginfo over that tree costs several GB of target/ and buys nothing —
+# line tables keep backtraces usable. See docs/conformance.md for the
+# follow-up: vendoring the auth protos and generating with tonic-build would
+# cut both the dependency surface and the build.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
+
+# Verification dominates every hot path: one DPoP proof signature plus the
+# status-token and receipt signatures per request, and §4.6 forbids caching the
+# proof. LTO and a single codegen unit are worth it for the release binary.
+#
+# CAVEAT, because it bit us: these settings are a guess. The latency claim has
+# never been benchmarked (see README "Latency is unmeasured"), and `lto = "thin"`
+# over this crate graph is expensive to BUILD. ans-verify hard-depends on
+# reqwest and hickory-resolver — neither is feature-gated — so the graph
+# unconditionally includes a DNS resolver, rustls, aws-lc-sys (AWS-LC compiled
+# from C) and ring, on top of envoy-types' 312 generated proto modules. Thin LTO
+# makes rustc emit bitcode into every rlib and the linker hold all of it at once,
+# which is what exhausted a podman VM's disk.
+#
+# Keep this for what you ship. Use `--profile container` to build it anywhere
+# else.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# Same binary, cheap to build. For local container builds, laptops, and CI jobs
+# that only need a working ans-authz rather than an optimal one.
+#
+# Behaviourally identical to release — only codegen differs. If you are
+# measuring latency, measure `release`; this profile will read slower.
+[profile.container]
+inherits = "release"
+lto = false
+codegen-units = 16
+# The final image only carries the binary, so debug info is dead weight there.
+strip = true

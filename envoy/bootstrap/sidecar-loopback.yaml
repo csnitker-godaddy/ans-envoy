@@ -1,0 +1,222 @@
+# ans-envoy — complete, runnable Envoy bootstrap for ANS-6 Method B.
+#
+# This file is part of the deliverable, not documentation. Five settings decide
+# whether a deployment satisfies ANS-6 and none of them live in the ans-authz
+# binary; getting them wrong produces a deployment that passes every functional
+# test while leaving a MUST-level requirement unenforced.
+#
+# Verify it before deploying:
+#
+#     ans-authz validate-envoy envoy/bootstrap/sidecar-loopback.yaml
+#
+# Topology: Envoy terminates TLS on :8443, authenticates the caller via
+# ans-authz on 127.0.0.1:10003, and forwards to the agent on 127.0.0.1:8080.
+# Method B exists for exactly this shape — the agent never sees the caller's
+# TLS, so the possession proof rides the DPoP header instead.
+
+admin:
+  address:
+    socket_address: { address: 127.0.0.1, port_value: 9902 }
+
+static_resources:
+  listeners:
+    - name: ingress
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8443 }
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+
+                # ── ANS-6 §7.3: path fidelity ──────────────────────────────
+                #
+                # The proof binds the URL the caller signed. §7.3 preserves the
+                # path byte-for-byte with "no dot-segment or percent-encoding
+                # canonicalization", so a path-rewriting hop "breaks the binding
+                # by design".
+                #
+                # Envoy hands ext_authz the path *after* HCM normalization, so
+                # any of these left on would make `htu` compare against a path
+                # the caller never signed. ans-authz cannot detect this from a
+                # CheckRequest — a normalized path is indistinguishable from one
+                # the client sent that way — so it has to be pinned here.
+                normalize_path: false
+                merge_slashes: false
+                path_with_escaped_slashes_action: KEEP_UNCHANGED
+
+                route_config:
+                  name: local
+                  virtual_hosts:
+                    - name: api
+                      # Both forms, because §7.7 compares authorities with
+                      # default ports dropped.
+                      domains: ["api.example.com", "api.example.com:443"]
+
+                      # ── ANS-6 §7.7: the authority ──────────────────────────
+                      #
+                      # This is the defence against the spec's own worked
+                      # example A.6, where a captured proof is replayed against
+                      # a different origin with a spoofed Host and every check
+                      # passes.
+                      #
+                      # `context_extensions` is the right carrier: it is
+                      # xDS-sourced, scoped per virtual host, and per the proto
+                      # "will not be sent to the upstream server" — so a client
+                      # cannot reach it. ans-authz builds the htu comparison URL
+                      # from this value joined with *this request's* path, and
+                      # never from the Host header.
+                      typed_per_filter_config:
+                        envoy.filters.http.ext_authz:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                          check_settings:
+                            context_extensions:
+                              ans_trusted_authority: "api.example.com"
+
+                      routes:
+                        - match: { prefix: "/" }
+                          route:
+                            cluster: agent
+                            # No prefix_rewrite / regex_rewrite here, ever. A
+                            # rewrite changes the path the caller signed and
+                            # breaks the htu binding (§7.3, §11.5).
+
+                http_filters:
+                  # ext_authz must precede the router, and must precede any
+                  # body-transforming filter (decompressor, transcoder) so the
+                  # octets it would hash are the ones the caller sent (§7.13).
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      transport_api_version: V3
+
+                      # ── ANS-6 §4.6: duplicate-header rejection ─────────────
+                      #
+                      # THE most-missed field. §4.6 requires rejecting a request
+                      # in which DPoP, Authorization, X-SCITT-Receipt, or
+                      # X-ANS-Status-Token appears more than once, because "two
+                      # hops reading different values of the same header reach
+                      # different conclusions about the same request".
+                      #
+                      # Without this, Envoy comma-merges same-name headers into
+                      # the `headers` map and two DPoP headers become
+                      # indistinguishable from one containing a comma — the check
+                      # is unenforceable. With it, `header_map` preserves each
+                      # occurrence.
+                      #
+                      # ans-authz denies EVERY request when it sees a
+                      # CheckRequest without a header_map, and /readyz reports
+                      # it. A loud outage beats an invisible weakening.
+                      encode_raw_headers: true
+
+                      # ── Fail closed (§7.6, §9.6) ──────────────────────────
+                      #
+                      # This is the default; stated explicitly so that changing
+                      # it shows up in a diff. `true` would admit requests
+                      # whenever ans-authz is unreachable, turning an
+                      # authenticator outage into an open door.
+                      failure_mode_allow: false
+
+                      # When ans-authz is unreachable, surface it as a 503 rather
+                      # than the default 403: an infrastructure failure should
+                      # not look like a policy decision.
+                      status_on_error: { code: ServiceUnavailable }
+
+                      # Hardening for an untrusted downstream.
+                      validate_mutations: true
+
+                      # Method A only. Set to true to have Envoy pass the
+                      # validated client certificate through as
+                      # `source.certificate`; see fragments/mtls-method-a.yaml.
+                      include_peer_certificate: false
+
+                      # ── ANS-6 §7.13: request-content binding ───────────────
+                      #
+                      # `htm` and `htu` bind the method and target; they say
+                      # nothing about the body. The hop that lets headers survive
+                      # TLS termination also sees and can rewrite the body, and
+                      # doing so on a *first* request trips no replay defence —
+                      # the jti is unseen and the iat fresh. The
+                      # ans_content_digest claim closes that, and it needs the
+                      # body here to compare against.
+                      #
+                      # All three settings are load-bearing:
+                      #
+                      #   allow_partial_message MUST be false. With true, Envoy
+                      #   truncates at max_request_bytes and flags
+                      #   x-envoy-auth-partial-body — and a prefix hash never
+                      #   matches a whole-content digest, so it is
+                      #   indistinguishable from tampering. ans-authz refuses
+                      #   such requests outright.
+                      #
+                      #   pack_as_bytes MUST be true. The string `body` field
+                      #   replaces non-UTF-8 bytes with '!', and a digest over
+                      #   replaced bytes is not a digest over what the caller
+                      #   signed.
+                      #
+                      #   max_request_bytes is a hard ceiling: Envoy answers 413
+                      #   itself above it and never calls this service. That is a
+                      #   rejection rather than a silent pass, so it is
+                      #   conformant — it just caps how large a bound body can
+                      #   be. Size it for the largest legitimate request.
+                      with_request_body:
+                        max_request_bytes: 1048576
+                        allow_partial_message: false
+                        pack_as_bytes: true
+
+                      grpc_service:
+                        envoy_grpc: { cluster_name: ans_authz }
+                        # NOT the 200ms default. ANS-6 verification does two or
+                        # three ECDSA verifications and may consult a shared
+                        # replay store; this must exceed replay.deadline_ms.
+                        timeout: 1s
+
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+          # The callee's own public Server Certificate (ANS-2). Callers verify
+          # this against a sealed fingerprint per §5. Note the nesting: this
+          # belongs to the filter chain, not the listener.
+          #
+          # For Method A, replace this block with the one in
+          # fragments/mtls-method-a.yaml, which adds require_client_certificate
+          # and a validation_context anchored on the RA private CA.
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain: { filename: /etc/envoy/tls/server.crt }
+                    private_key: { filename: /etc/envoy/tls/server.key }
+
+  clusters:
+    - name: ans_authz
+      type: STATIC
+      connect_timeout: 1s
+      # ext_authz speaks gRPC, so the cluster must be HTTP/2.
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}
+      load_assignment:
+        cluster_name: ans_authz
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: 127.0.0.1, port_value: 10003 }
+
+    - name: agent
+      type: STATIC
+      connect_timeout: 1s
+      load_assignment:
+        cluster_name: agent
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: 127.0.0.1, port_value: 8080 }

@@ -1,0 +1,49 @@
+# ANS-6 §7.6 replay cache.
+#
+# `--maxmemory-policy noeviction` is not optional and not a tuning choice.
+# ans-authz reads it at startup and REFUSES TO START on anything else: under an
+# evicting policy Redis drops a live `jti` to make room, and the next presentation
+# of that proof looks fresh. §7.6 forbids a cache that "silently admits a
+# possibly-replayed proof".
+#
+# DEMO ONLY: persistence is disabled. A restart loses live replay reservations
+# and can admit a captured proof again within its freshness window. Production
+# must preserve reservations through restart/failover, or stop admission until
+# all potentially lost proofs expire. noeviction alone does not provide this.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: ans-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["--maxmemory-policy", "noeviction", "--save", ""]
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 2
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: ans-demo
+spec:
+  selector: { app: redis }
+  ports:
+    - port: 6379
+      targetPort: 6379

@@ -1,0 +1,39 @@
+[package]
+name = "ans-envoy-core"
+description = "ANS-6 agent-to-agent authentication decision logic, independent of any proxy wire format"
+keywords = ["ans", "ans-6", "dpop", "authentication", "envoy"]
+categories = ["authentication", "cryptography"]
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+ans-types = { workspace = true }
+ans-verify = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+x509-parser = { workspace = true }
+
+[dev-dependencies]
+# Fixture material for the end-to-end verification tests. Identity certificates
+# are committed DER under testdata/demo-agents rather than generated at test time —
+# stable, inspectable, and they double as conformance vectors. These crates cover
+# the TL signing key and the COSE_Sign1 artifacts.
+base64 = { workspace = true }
+ciborium = "0.2"
+p256 = { version = "0.14", features = ["ecdsa", "pkcs8"] }
+rstest = { workspace = true }
+tokio = { workspace = true }

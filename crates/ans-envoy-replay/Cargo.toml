@@ -1,0 +1,26 @@
+[package]
+name = "ans-envoy-replay"
+description = "Shared, fail-closed ANS-6 §7.6 replay caches for the ans-envoy authorizer"
+keywords = ["ans", "ans-6", "dpop", "replay", "redis"]
+categories = ["authentication", "caching"]
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+ans-verify = { workspace = true }
+async-trait = { workspace = true }
+redis = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }

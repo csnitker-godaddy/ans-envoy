@@ -1,0 +1,15 @@
+# NEGATIVE FIXTURE — this configuration is NOT ANS-6 conformant.
+#
+# CI asserts `ans-authz validate-envoy` rejects it. It is the single most likely
+# real-world mistake: everything functional works, requests authenticate, and the
+# §4.6 duplicate-header rule is silently unenforceable because Envoy comma-merges
+# same-name headers without `encode_raw_headers: true`.
+http_filters:
+  - name: envoy.filters.http.ext_authz
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+      transport_api_version: V3
+      failure_mode_allow: false
+      grpc_service:
+        envoy_grpc: { cluster_name: ans_authz }
+        timeout: 1s

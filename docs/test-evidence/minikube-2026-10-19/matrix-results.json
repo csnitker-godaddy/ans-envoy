@@ -1,0 +1,457 @@
+{
+  "mode": "matrix",
+  "passed": 50,
+  "total": 50,
+  "results": [
+    {
+      "name": "valid empty Method B",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "cross-replica replay",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "REPLAY",
+      "label": "REPLAY",
+      "upstream_requests": 0
+    },
+    {
+      "name": "fresh proof through second replica",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "no credential",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "NO_CREDENTIAL",
+      "label": "NO_CREDENTIAL",
+      "upstream_requests": 0
+    },
+    {
+      "name": "missing status token",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MISSING_HEADERS",
+      "label": "MISSING_HEADERS",
+      "upstream_requests": 0
+    },
+    {
+      "name": "missing receipt",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MISSING_HEADERS",
+      "label": "MISSING_HEADERS",
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate DPoP",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "DUPLICATE_HEADER",
+      "label": "DUPLICATE_HEADER",
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate X-ANS-Status-Token",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "DUPLICATE_HEADER",
+      "label": "DUPLICATE_HEADER",
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate X-SCITT-Receipt",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "DUPLICATE_HEADER",
+      "label": "DUPLICATE_HEADER",
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate Authorization",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "DUPLICATE_HEADER",
+      "label": "DUPLICATE_HEADER",
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate Authorization with matching merged ath",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "DUPLICATE_HEADER",
+      "label": "DUPLICATE_HEADER",
+      "upstream_requests": 0
+    },
+    {
+      "name": "duplicate Bearer credentials",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "DUPLICATE_HEADER",
+      "label": "DUPLICATE_HEADER",
+      "upstream_requests": 0
+    },
+    {
+      "name": "single DPoP token remains valid",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "wrong origin with spoofed Host",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "HTTP_BINDING_MISMATCH",
+      "label": "HTTP_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "wrong method",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "HTTP_BINDING_MISMATCH",
+      "label": "HTTP_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "wrong path",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "HTTP_BINDING_MISMATCH",
+      "label": "HTTP_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "raw path preserved /a/../api/task",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "raw path preserved /a/%2e%2e/api/task",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "raw path preserved /api%2ftask",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "dot segments do not alias",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "HTTP_BINDING_MISMATCH",
+      "label": "HTTP_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "escape case does not alias",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "HTTP_BINDING_MISMATCH",
+      "label": "HTTP_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "ASCII content intact",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "binary content intact",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "gzip content intact",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "chunked transfer preserves digest",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "altered body",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "CONTENT_BINDING_MISMATCH",
+      "label": "CONTENT_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "failed content check does not spend proof",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "body added to empty request",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "CONTENT_BINDING_MISMATCH",
+      "label": "CONTENT_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "body removed",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "CONTENT_BINDING_MISMATCH",
+      "label": "CONTENT_BINDING_MISMATCH",
+      "upstream_requests": 0
+    },
+    {
+      "name": "missing digest",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MALFORMED_PROOF",
+      "label": "MALFORMED_PROOF",
+      "upstream_requests": 0
+    },
+    {
+      "name": "malformed digest",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MALFORMED_PROOF",
+      "label": "MALFORMED_PROOF",
+      "upstream_requests": 0
+    },
+    {
+      "name": "null profile",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MALFORMED_PROOF",
+      "label": "MALFORMED_PROOF",
+      "upstream_requests": 0
+    },
+    {
+      "name": "unsupported profile",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "UNSUPPORTED_PROFILE",
+      "label": "UNSUPPORTED_PROFILE",
+      "upstream_requests": 0
+    },
+    {
+      "name": "absent profile selects revision one",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "unknown payload claim tolerated",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "unknown protected header rejected",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MALFORMED_PROOF",
+      "label": "MALFORMED_PROOF",
+      "upstream_requests": 0
+    },
+    {
+      "name": "expired proof",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "PROOF_STALE",
+      "label": "PROOF_STALE",
+      "upstream_requests": 0
+    },
+    {
+      "name": "expired status token",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "STATUS_INVALID",
+      "label": "STATUS_INVALID",
+      "upstream_requests": 0
+    },
+    {
+      "name": "revoked registration",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "STATUS_INVALID",
+      "label": "STATUS_INVALID",
+      "upstream_requests": 0
+    },
+    {
+      "name": "invalid supplied receipt",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "RECEIPT_INVALID",
+      "label": "RECEIPT_INVALID",
+      "upstream_requests": 0
+    },
+    {
+      "name": "receipt version mismatch",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "BINDING_FAILED",
+      "label": "BINDING_FAILED",
+      "upstream_requests": 0
+    },
+    {
+      "name": "spoofed upstream identity replaced",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "oversize body rejected by Envoy",
+      "pass": true,
+      "expected_status": 413,
+      "status": 413,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 0
+    },
+    {
+      "name": "valid Method A with private test CA",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    },
+    {
+      "name": "Method A missing receipt",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "MISSING_HEADERS",
+      "label": "MISSING_HEADERS",
+      "upstream_requests": 0
+    },
+    {
+      "name": "Method A wrong certificate fingerprint",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "BINDING_FAILED",
+      "label": "BINDING_FAILED",
+      "upstream_requests": 0
+    },
+    {
+      "name": "Method A full-name version mismatch",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "BINDING_FAILED",
+      "label": "BINDING_FAILED",
+      "upstream_requests": 0
+    },
+    {
+      "name": "Method A receipt version mismatch",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "BINDING_FAILED",
+      "label": "BINDING_FAILED",
+      "upstream_requests": 0
+    },
+    {
+      "name": "Method A bad receipt",
+      "pass": true,
+      "expected_status": 401,
+      "status": 401,
+      "expected_label": "RECEIPT_INVALID",
+      "label": "RECEIPT_INVALID",
+      "upstream_requests": 0
+    },
+    {
+      "name": "DPoP wins when mTLS also present",
+      "pass": true,
+      "expected_status": 200,
+      "status": 200,
+      "expected_label": null,
+      "label": null,
+      "upstream_requests": 1
+    }
+  ]
+}
