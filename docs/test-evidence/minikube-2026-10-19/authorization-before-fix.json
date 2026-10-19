@@ -1,0 +1,26 @@
+[
+  {
+    "candidate": "token",
+    "status": 401,
+    "label": "TOKEN_BINDING_MISMATCH",
+    "upstream_requests": 0
+  },
+  {
+    "candidate": "token,DPoP token",
+    "status": 200,
+    "label": null,
+    "upstream_requests": 1
+  },
+  {
+    "candidate": "token, DPoP token",
+    "status": 401,
+    "label": "TOKEN_BINDING_MISMATCH",
+    "upstream_requests": 0
+  },
+  {
+    "candidate": "duplicate Bearer",
+    "status": 200,
+    "label": null,
+    "upstream_requests": 1
+  }
+]

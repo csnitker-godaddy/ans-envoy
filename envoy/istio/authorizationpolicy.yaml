@@ -1,0 +1,19 @@
+# Route traffic through ans-authz.
+#
+# CUSTOM action with an extensionProvider is how Istio invokes ext_authz.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: ans-authz
+  namespace: ans-system
+spec:
+  selector:
+    matchLabels:
+      app: agent
+  action: CUSTOM
+  provider:
+    name: ans-authz
+  rules:
+    - to:
+        - operation:
+            paths: ["/*"]

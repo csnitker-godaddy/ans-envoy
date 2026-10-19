@@ -1,0 +1,31 @@
+# Envoy Gateway SecurityPolicy for ans-authz.
+#
+# The supported half. `encode_raw_headers` is not expressible here — see
+# envoypatchpolicy-raw-headers.yaml and ./README.md.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: ans-authz
+  namespace: ans-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: agent
+  extAuth:
+    # §7.6, §9.6 — fail closed. Absent or false is the conformant value.
+    failOpen: false
+    grpc:
+      backendRefs:
+        - name: ans-authz
+          namespace: ans-system
+          port: 10003
+    # §7.7 — the externally-visible authority, asserted out of band so a client
+    # cannot forge it. This is the field Istio lacks, and having it means §7.7 is
+    # satisfiable here with supported API.
+    #
+    # One SecurityPolicy per authority: this value must match the authority the
+    # route actually answers as, or a proof minted for one origin would pass on a
+    # request that arrived at another.
+    contextExtensions:
+      ans_trusted_authority: "api.example.com"

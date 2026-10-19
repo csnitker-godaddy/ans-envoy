@@ -1,0 +1,33 @@
+# ans-authz over a Unix domain socket.
+#
+# Replaces the `ans_authz` cluster in bootstrap/sidecar-loopback.yaml. Everything
+# else — the filter block, the path-fidelity knobs, the per-vhost authority — is
+# unchanged.
+#
+# Worth preferring over loopback TCP where the two processes share a netns. This
+# service answers "is this caller authentic", so anything that can reach it and be
+# believed is an authentication bypass; a socket with filesystem permissions is a
+# smaller surface than a port any local process can connect to.
+#
+# Set `uds_path` (and not `listen`) in the ans-authz config to match.
+
+clusters:
+  - name: ans_authz
+    type: STATIC
+    connect_timeout: 1s
+    typed_extension_protocol_options:
+      envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+        "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+        explicit_http_config:
+          http2_protocol_options: {}
+    load_assignment:
+      cluster_name: ans_authz
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  pipe:
+                    path: /run/ans-authz/authz.sock
+                    # 0o600: only the user Envoy runs as. The default would let
+                    # any local process connect.
+                    mode: 384

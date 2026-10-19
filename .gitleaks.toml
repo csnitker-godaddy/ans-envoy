@@ -1,0 +1,18 @@
+# Keep the default rules. These two values are verified SHA-256 hashes of
+# public TL artifacts, not API keys or bearer credentials. Scope exceptions
+# to their exact values and evidence file; do not ignore the fixture tree.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Public TL evidence digests verified against the captured artifacts"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^docs/test-evidence/minikube-2026-10-19/live-tl-results\.json$''']
+regexes = [
+    '''^8f74b1bd4a3e2f2026aa9c381dc44a6ff8494fc7e6f7a95098b22d3f880407e9$''',
+    '''^fddfab85ebfd672096ccb7792e167a4313dddd699068846fdfcc0e8f4b2354ce$''',
+]

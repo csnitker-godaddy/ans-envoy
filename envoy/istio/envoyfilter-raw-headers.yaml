@@ -1,0 +1,65 @@
+# UNSUPPORTED PATCH — required for ANS-6 §4.6 conformance on Istio.
+#
+# Istio's envoyExtAuthzGrpc provider does not expose `encode_raw_headers`, and
+# without it Envoy comma-merges same-name headers: two `DPoP` headers arrive
+# indistinguishable from one containing a comma, and §4.6 duplicate-header
+# rejection becomes impossible at this hop.
+#
+# Istio documents EnvoyFilter as unsupported and version-fragile. Verify the
+# filter name and the merge applies on your Istio and Envoy versions — a patch
+# that silently stops matching takes §4.6 with it.
+#
+# The failure is loud rather than silent: ans-authz denies every request with
+# RAW_HEADERS_UNAVAILABLE and /readyz returns 503. Gate rollouts on /readyz.
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: ans-authz-raw-headers
+  namespace: ans-system
+spec:
+  workloadSelector:
+    labels:
+      app: agent
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                # Istio names the generated ext_authz filter after the provider.
+                name: envoy.filters.http.ext_authz
+      patch:
+        operation: MERGE
+        value:
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+            # The whole point of this file.
+            encode_raw_headers: true
+            with_request_body:
+              max_request_bytes: 1048576
+              allow_partial_message: false
+              pack_as_bytes: true
+            # Set only if this deployment accepts Method A callers (§6.1).
+            # include_peer_certificate: true
+
+    # §7.3 path fidelity. Istio's HCM defaults do not guarantee these, and unlike
+    # the two above, a wrong value here is NOT detectable at runtime: a normalized
+    # path is indistinguishable from one the client sent that way.
+    - applyTo: NETWORK_FILTER
+      match:
+        context: SIDECAR_INBOUND
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+      patch:
+        operation: MERGE
+        value:
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+            normalize_path: false
+            merge_slashes: false
+            path_with_escaped_slashes_action: KEEP_UNCHANGED

@@ -1,0 +1,95 @@
+# ANS-6 §6 Method A — mTLS, spliced onto the Method-B listener.
+#
+# Verify with:  ans-authz validate-envoy envoy/fragments/mtls-method-a.yaml --method-a
+#
+# Method A splits its conformance across two artifacts, and the split is worth
+# being explicit about:
+#
+#   Envoy does    — validate the client certificate chain against the RA private
+#                   CA, and prove possession via the TLS CertificateVerify.
+#   ans-authz does — bind that already-validated certificate to what the
+#                   Transparency Log says about it (§6.3).
+#
+# The second half is not optional. §6.1: ANS-1 revocation revokes identity
+# certificates at the issuing private CA, but that CA "publishes no CRL or OCSP
+# endpoint, so a revoked certificate still chains cleanly". A successful handshake
+# therefore says nothing about revocation — the status token is the revocation
+# channel, which is why §6.2/§6.3 verification is REQUIRED even after the
+# handshake succeeds.
+
+# ── The filter change ────────────────────────────────────────────────────────
+#
+# One field beyond the Method-B block: without it the validated certificate never
+# reaches ans-authz and there is no identity to bind.
+http_filters:
+  - name: envoy.filters.http.ext_authz
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+      transport_api_version: V3
+      encode_raw_headers: true
+      failure_mode_allow: false
+      status_on_error: { code: ServiceUnavailable }
+      validate_mutations: true
+
+      # §6.1 — hand the validated leaf to ans-authz as `source.certificate`
+      # (percent-encoded PEM).
+      #
+      # Note ans-authz does NOT read `source.principal`: that field holds only
+      # the first URI SAN, so it cannot supply the DNS SAN or the SHA-256
+      # fingerprint §6.3 compares. Parsing the certificate once, ourselves, beats
+      # trusting a pre-extracted identity plus a second parser.
+      include_peer_certificate: true
+      # Preserve Method B body binding when both methods are enabled.
+      with_request_body:
+        max_request_bytes: 1048576
+        allow_partial_message: false
+        pack_as_bytes: true
+
+      grpc_service:
+        envoy_grpc: { cluster_name: ans_authz }
+        timeout: 1s
+
+# ── The listener transport socket ────────────────────────────────────────────
+#
+# Replaces the DownstreamTlsContext in the Method-B bootstrap.
+transport_socket:
+  name: envoy.transport_sockets.tls
+  typed_config:
+    "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+
+    # Reject a handshake that presents no client certificate. Without this, a
+    # caller could simply omit it and fall through to whatever the deployment
+    # does for an unauthenticated request.
+    require_client_certificate: true
+
+    common_tls_context:
+      # The callee's own public Server Certificate (ANS-2). Callers verify this
+      # against a sealed fingerprint per §5.
+      tls_certificates:
+        - certificate_chain: { filename: /etc/envoy/tls/server.crt }
+          private_key: { filename: /etc/envoy/tls/server.key }
+
+      validation_context:
+        # §6.1 step 1 — the RA's Private CA. This is the ANS Identity Certificate
+        # trust anchor, and it is deliberately NOT a public CA bundle: identity
+        # certificates are issued by the registration authority, and a public CA
+        # cannot issue the `ans://` URI SAN they carry (ANS-2 §3).
+        trusted_ca: { filename: /etc/envoy/tls/ra-private-ca.crt }
+
+        # §6.1 step 2 — require an `ans://` URI SAN. "No URI SAN → not an ANS
+        # Identity Certificate", so rejecting here saves ans-authz the round trip.
+        #
+        # This is a coarse prefix match; the exact name is bound to the status
+        # token by ans-authz per §6.3. Envoy cannot do that comparison — it has
+        # no idea what the TL says about this certificate.
+        match_typed_subject_alt_names:
+          - san_type: URI
+            matcher:
+              prefix: "ans://"
+
+        # Left unset deliberately: crl.
+        #
+        # §6.1 notes the RA private CA "publishes no CRL or OCSP endpoint", so
+        # there is nothing to point at. Where a deployment's CA does publish
+        # revocation, adding it here is defence in depth — but it never replaces
+        # the §6.3 status-token check, because the TL is the revocation channel.

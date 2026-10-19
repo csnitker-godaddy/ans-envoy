@@ -1,0 +1,227 @@
+{
+  "date": "2026-10-19",
+  "mode": "temporary testing only",
+  "context": "minikube",
+  "namespace": "ans-envoy-validation",
+  "proxy": "Tinyproxy 1.11.3",
+  "listener": "192.168.64.1:18889",
+  "allowed_clients": [
+    "192.168.64.1",
+    "192.168.64.4"
+  ],
+  "https_connect_ports": [
+    443
+  ],
+  "http_node_test": {
+    "url": "http://1.1.1.1/",
+    "status": 301
+  },
+  "https_pod_test": {
+    "url": "https://tl.ans.snitker.dev/root-keys",
+    "status": 200,
+    "key_id": "8f74b1bd",
+    "certificate_verification": true
+  },
+  "authorizer_static_keys": [],
+  "bootstrap_verified": true,
+  "background_refresh_verified": true,
+  "events": [
+    {
+      "timestamp": "2026-10-19T16:27:11.184856Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:11.855136Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:11.855189Z",
+      "level": "INFO",
+      "fields": {
+        "message": "TL key store bootstrapped",
+        "keys": 1,
+        "url": "https://tl.ans.snitker.dev"
+      },
+      "target": "ans_authz::runtime"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:16.857868Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:16.976464Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:16.976522Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "SCITT root keys refreshed",
+        "key_count": 1
+      },
+      "target": "ans_verify::scitt::refreshable_key_store"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:21.977340Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:22.095161Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:22.095217Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "SCITT root keys refreshed",
+        "key_count": 1
+      },
+      "target": "ans_verify::scitt::refreshable_key_store"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:27.096125Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:27.224569Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:27.224651Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "SCITT root keys refreshed",
+        "key_count": 1
+      },
+      "target": "ans_verify::scitt::refreshable_key_store"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:32.226518Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:32.348811Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:32.348911Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "SCITT root keys refreshed",
+        "key_count": 1
+      },
+      "target": "ans_verify::scitt::refreshable_key_store"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:37.350075Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:37.467315Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:37.467384Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "SCITT root keys refreshed",
+        "key_count": 1
+      },
+      "target": "ans_verify::scitt::refreshable_key_store"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:42.468778Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetching SCITT root keys",
+        "url": "https://tl.ans.snitker.dev/root-keys"
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:42.588774Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "Fetched SCITT root keys",
+        "count": 1
+      },
+      "target": "ans_verify::scitt::client"
+    },
+    {
+      "timestamp": "2026-10-19T16:27:42.588952Z",
+      "level": "DEBUG",
+      "fields": {
+        "message": "SCITT root keys refreshed",
+        "key_count": 1
+      },
+      "target": "ans_verify::scitt::refreshable_key_store"
+    }
+  ],
+  "persistent_service_installed": false,
+  "main_gateway_configuration_changed": false,
+  "temporary_pod_removed": true,
+  "temporary_configmap_removed": true,
+  "proxy_stopped": true,
+  "connectivity_listener_stopped": true,
+  "ongoing_egress_enabled": false
+}

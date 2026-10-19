@@ -1,0 +1,154 @@
+# ans-authz as a standalone Service, which is how Istio's ext_authz provider
+# addresses it.
+#
+# This is a real difference from the raw-Envoy manifests, not just packaging. There,
+# ans-authz binds loopback inside the gateway pod and nothing else in the cluster
+# can reach it. Here it must bind 0.0.0.0 and accept connections over the network —
+# so anything that can reach it and be believed is an authentication bypass.
+#
+# The PeerAuthentication and AuthorizationPolicy below are what close that back up.
+# Do not skip them.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ans-authz-config
+  namespace: ans-demo
+data:
+  ans-authz.toml: |
+    [server]
+    # 0.0.0.0, unlike the raw-Envoy deployment — see the note above.
+    listen = "0.0.0.0:10003"
+    admin_listen = "0.0.0.0:9901"
+
+    [authority]
+    # Istio's envoyExtAuthzGrpc provider does NOT expose context_extensions, so the
+    # per-route authority assertion is unavailable through supported API.
+    #
+    # Two options:
+    #   sole_configured   — correct while this callee answers as exactly one
+    #                       authority, and satisfiable with no patch. Used here.
+    #   context_extension — stronger and scales past one authority, but needs the
+    #                       EnvoyFilter in 50-envoyfilter.yaml.
+    mode = "sole_configured"
+    authorities = ["agent.example.com"]
+
+    [verification]
+    methods = "method_b"
+    require_receipt = true
+    allowed_ans_names = []
+    pop_skew_secs = 120
+    status_skew_secs = 60
+    content_binding = "required"
+
+    [replay]
+    backend = "redis"
+    redis_url = "redis://redis.ans-demo.svc.cluster.local:6379"
+    key_prefix = "ans6:istio:"
+    deadline_ms = 200
+    max_entries = 100000
+    replicas = 2
+
+    [transparency_log]
+    # EDIT: your reference-implementation TL.
+    root_keys_url = "https://host.minikube.internal:8443/root-keys"
+    static_root_keys = []
+    refresh_interval_secs = 1800
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ans-authz
+  namespace: ans-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: ans-authz }
+  template:
+    metadata:
+      labels: { app: ans-authz }
+    spec:
+      containers:
+        - name: ans-authz
+          image: ans-envoy/ans-authz:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 10003
+            - name: admin
+              containerPort: 9901
+          env:
+            - name: ANS_AUTHZ_LOG
+              value: "info"
+            - name: ANS_AUTHZ_LOG_JSON
+              value: "1"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/ans-authz
+              readOnly: true
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9901 }
+            initialDelaySeconds: 3
+          # Returns 503 once it has seen a request without an uncoalesced header
+          # map — i.e. once it knows the EnvoyFilter is not applying and it is
+          # denying everything. On Istio that is the failure mode to watch for.
+          readinessProbe:
+            httpGet: { path: /readyz, port: 9901 }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap: { name: ans-authz-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ans-authz
+  namespace: ans-demo
+spec:
+  selector: { app: ans-authz }
+  ports:
+    - name: grpc-authz
+      port: 10003
+      targetPort: 10003
+    - name: http-admin
+      port: 9901
+      targetPort: 9901
+---
+# Require mTLS to ans-authz. Without this, any pod that can route to the Service
+# can ask it to authenticate a request — and be believed.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: ans-authz-mtls
+  namespace: ans-demo
+spec:
+  selector:
+    matchLabels: { app: ans-authz }
+  mtls:
+    mode: STRICT
+---
+# And restrict callers to the gateway's service account. mTLS alone proves the
+# caller is *in the mesh*, not that it is the proxy.
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: ans-authz-callers
+  namespace: ans-demo
+spec:
+  selector:
+    matchLabels: { app: ans-authz }
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              # EDIT to your ingress gateway's service account.
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"

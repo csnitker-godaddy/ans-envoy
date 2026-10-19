@@ -1,0 +1,13 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: ans-authz
+  namespace: ans-system
+spec:
+  endpoints:
+    - fqdn:
+        hostname: ans-authz.ans-system.svc.cluster.local
+        port: 10003
+  # ext_authz speaks gRPC, so the backend must be HTTP/2.
+  appProtocols:
+    - gateway.envoyproxy.io/h2c

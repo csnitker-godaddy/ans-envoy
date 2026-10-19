@@ -1,0 +1,66 @@
+# UNSUPPORTED PATCH — required for ANS-6 §4.6 conformance on Envoy Gateway.
+#
+# Requires `enableEnvoyPatchPolicy: true` in the EnvoyGateway config. The project
+# documents EnvoyPatchPolicy as an escape hatch rather than API, and the JSON
+# patch paths depend on generated resource names, so verify against your version.
+#
+# Without `encode_raw_headers`, Envoy comma-merges same-name headers and two
+# `DPoP` headers become indistinguishable from one containing a comma — §4.6
+# duplicate-header rejection becomes impossible.
+#
+# The failure is loud: ans-authz denies every request with
+# RAW_HEADERS_UNAVAILABLE and /readyz returns 503.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: ans-authz-raw-headers
+  namespace: ans-system
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agent-gateway
+  type: JSONPatch
+  jsonPatches:
+    # Adjust the listener name to the generated one for your Gateway:
+    #   egctl config envoy-proxy listener -n <ns> <pod>
+    - type: "type.googleapis.com/envoy.config.listener.v3.Listener"
+      name: ans-system/agent-gateway/https
+      operation:
+        op: add
+        path: "/default_filter_chain/filters/0/typed_config/http_filters/0/typed_config/encode_raw_headers"
+        value: true
+
+    # §7.13: every proof binds complete raw content, including empty content.
+    - type: "type.googleapis.com/envoy.config.listener.v3.Listener"
+      name: ans-system/agent-gateway/https
+      operation:
+        op: add
+        path: "/default_filter_chain/filters/0/typed_config/http_filters/0/typed_config/with_request_body"
+        value:
+          max_request_bytes: 1048576
+          allow_partial_message: false
+          pack_as_bytes: true
+
+    # §7.3 path fidelity. Unlike the above, a wrong value here is NOT detectable
+    # at runtime — a normalized path is indistinguishable from one the client sent
+    # that way, so `htu` would be compared against something the caller never
+    # signed and every request would still authenticate.
+    - type: "type.googleapis.com/envoy.config.listener.v3.Listener"
+      name: ans-system/agent-gateway/https
+      operation:
+        op: add
+        path: "/default_filter_chain/filters/0/typed_config/normalize_path"
+        value: false
+    - type: "type.googleapis.com/envoy.config.listener.v3.Listener"
+      name: ans-system/agent-gateway/https
+      operation:
+        op: add
+        path: "/default_filter_chain/filters/0/typed_config/merge_slashes"
+        value: false
+    - type: "type.googleapis.com/envoy.config.listener.v3.Listener"
+      name: ans-system/agent-gateway/https
+      operation:
+        op: add
+        path: "/default_filter_chain/filters/0/typed_config/path_with_escaped_slashes_action"
+        value: KEEP_UNCHANGED
